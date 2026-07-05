@@ -18,12 +18,24 @@ class ReceiptScreen extends StatefulWidget {
 class _ReceiptScreenState extends State<ReceiptScreen> {
   late TransactionModel _txn;
   bool _refreshing = false;
+  bool _refunding = false;
+  String? _myUserId;
 
   @override
   void initState() {
     super.initState();
     _txn = widget.txn;
+    _loadMe();
   }
+
+  Future<void> _loadMe() async {
+    try {
+      final me = await context.read<ApiClient>().me();
+      if (mounted) setState(() => _myUserId = me['id'] as String?);
+    } catch (_) {/* refund button just stays hidden */}
+  }
+
+  bool get _canRefund => _txn.status == 'SUCCESS' && _myUserId != null && _myUserId == _txn.payeeId;
 
   Future<void> _refresh() async {
     setState(() => _refreshing = true);
@@ -32,6 +44,37 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
       if (mounted) setState(() => _txn = updated);
     } catch (_) {/* keep showing what we have */}
     if (mounted) setState(() => _refreshing = false);
+  }
+
+  Future<void> _refund() async {
+    final api = context.read<ApiClient>();
+    final messenger = ScaffoldMessenger.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Refund payment?'),
+        content: Text(
+          'This will refund ${formatAmount(_txn.amount, _txn.currency)} to the customer. '
+          'This cannot be undone.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Refund')),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    setState(() => _refunding = true);
+    try {
+      final updated = await api.refund(_txn.id);
+      if (mounted) setState(() => _txn = updated);
+      messenger.showSnackBar(const SnackBar(content: Text('Refund issued')));
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(apiErrorMessage(e))));
+    } finally {
+      if (mounted) setState(() => _refunding = false);
+    }
   }
 
   @override
@@ -99,6 +142,21 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
                 ),
               ),
             ),
+            if (_canRefund) ...[
+              const SizedBox(height: 20),
+              OutlinedButton.icon(
+                onPressed: _refunding ? null : _refund,
+                icon: _refunding
+                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.undo),
+                label: const Text('Refund this payment'),
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size.fromHeight(52),
+                  foregroundColor: Colors.red,
+                  side: const BorderSide(color: Colors.red),
+                ),
+              ),
+            ],
             const SizedBox(height: 16),
             const Text(
               'Verified server-side with the payment provider.',

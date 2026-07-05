@@ -55,6 +55,7 @@ class RealtimeService {
     socket.onConnectError((e) => debugPrint('Realtime connect error: $e'));
     socket.on('payment.success', (d) => _emit('payment.success', d));
     socket.on('payment.failed', (d) => _emit('payment.failed', d));
+    socket.on('payment.refunded', (d) => _emit('payment.refunded', d));
     socket.connect();
     _socket = socket;
   }
