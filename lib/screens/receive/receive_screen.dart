@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/models.dart';
 import '../../services/api_client.dart';
+import '../../theme.dart';
+import '../../widgets/ui.dart';
 import 'collect_screen.dart';
 
-/// Merchant entry point: ensures a merchant profile exists, then collects an amount.
+/// Merchant entry point: ensure a merchant profile exists, then collect an amount.
 class ReceiveScreen extends StatefulWidget {
   const ReceiveScreen({super.key});
 
@@ -27,6 +29,7 @@ class _ReceiveScreenState extends State<ReceiveScreen> {
     setState(() => _loading = true);
     try {
       _merchant = await context.read<ApiClient>().myMerchant();
+      _error = null;
     } catch (e) {
       _error = apiErrorMessage(e);
     } finally {
@@ -41,7 +44,12 @@ class _ReceiveScreenState extends State<ReceiveScreen> {
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
-              ? _ErrorView(message: _error!, onRetry: _load)
+              ? EmptyState(
+                  icon: Icons.wifi_off_rounded,
+                  title: 'Something went wrong',
+                  subtitle: _error,
+                  action: OutlinedButton(onPressed: _load, child: const Text('Retry')),
+                )
               : _merchant == null
                   ? _MerchantSetup(onDone: (m) => setState(() => _merchant = m))
                   : _AmountForm(merchant: _merchant!),
@@ -83,33 +91,34 @@ class _MerchantSetupState extends State<_MerchantSetup> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(20),
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const SizedBox(height: 8),
-          const Text('Set up your business',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+          Container(
+            width: 60,
+            height: 60,
+            decoration: BoxDecoration(gradient: AppGradients.mint, borderRadius: BorderRadius.circular(AppRadius.m)),
+            child: const Icon(Icons.storefront_rounded, color: Colors.white, size: 28),
+          ),
+          const SizedBox(height: 18),
+          const Text('Set up your business', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.ink, letterSpacing: -0.4)),
           const SizedBox(height: 4),
-          const Text('This name is shown to customers when they pay you.',
-              style: TextStyle(color: Colors.black54)),
-          const SizedBox(height: 20),
+          const Text('This name is shown to customers when they pay you.', style: TextStyle(color: AppColors.inkSoft, height: 1.4)),
+          const SizedBox(height: 22),
           TextField(
             controller: _name,
-            decoration: const InputDecoration(labelText: 'Business name', prefixIcon: Icon(Icons.store_outlined)),
+            textCapitalization: TextCapitalization.words,
+            decoration: const InputDecoration(labelText: 'Business name', prefixIcon: Icon(Icons.badge_outlined)),
           ),
           if (_error != null) ...[
             const SizedBox(height: 10),
-            Text(_error!, style: const TextStyle(color: Colors.red)),
+            Text(_error!, style: const TextStyle(color: AppColors.danger, fontSize: 13)),
           ],
           const SizedBox(height: 24),
-          FilledButton(
-            onPressed: _busy ? null : _save,
-            child: _busy
-                ? const SizedBox(height: 22, width: 22, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                : const Text('Continue'),
-          ),
+          GradientButton(label: 'Continue', gradient: AppGradients.mint, loading: _busy, onPressed: _save),
         ],
       ),
     );
@@ -125,27 +134,43 @@ class _AmountForm extends StatefulWidget {
 }
 
 class _AmountFormState extends State<_AmountForm> {
-  final _amount = TextEditingController();
+  String _amount = '0';
   final _note = TextEditingController();
   bool _busy = false;
   String? _error;
 
+  void _tap(String key) {
+    setState(() {
+      _error = null;
+      if (key == '⌫') {
+        _amount = _amount.length <= 1 ? '0' : _amount.substring(0, _amount.length - 1);
+      } else if (key == '.') {
+        if (!_amount.contains('.')) _amount = '$_amount.';
+      } else {
+        if (_amount == '0') {
+          _amount = key;
+        } else if (_amount.contains('.') && _amount.split('.')[1].length >= 2) {
+          return; // max 2 decimals
+        } else {
+          _amount = '$_amount$key';
+        }
+      }
+    });
+  }
+
+  int get _minor => ((double.tryParse(_amount) ?? 0) * 100).round();
+
   Future<void> _start() async {
-    final major = double.tryParse(_amount.text.trim());
-    if (major == null || major <= 0) {
-      setState(() => _error = 'Enter a valid amount');
+    if (_minor <= 0) {
+      setState(() => _error = 'Enter an amount');
       return;
     }
-    final minor = (major * 100).round();
     setState(() {
       _busy = true;
       _error = null;
     });
     try {
-      final session = await context.read<ApiClient>().createSession(
-            amount: minor,
-            description: _note.text.trim(),
-          );
+      final session = await context.read<ApiClient>().createSession(amount: _minor, description: _note.text.trim());
       if (!mounted) return;
       Navigator.push(context, MaterialPageRoute(builder: (_) => CollectScreen(session: session)));
     } catch (e) {
@@ -157,66 +182,90 @@ class _AmountFormState extends State<_AmountForm> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(widget.merchant.businessName,
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 20),
-          TextField(
-            controller: _amount,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
-            decoration: InputDecoration(
-              labelText: 'Amount',
-              prefixText: '${widget.merchant.currency} ',
-            ),
+    return Column(
+      children: [
+        Expanded(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(widget.merchant.businessName, style: const TextStyle(color: AppColors.inkSoft, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 14),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.baseline,
+                textBaseline: TextBaseline.alphabetic,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: Text(widget.merchant.currency,
+                        style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: AppColors.inkFaint)),
+                  ),
+                  Text(_amount, style: const TextStyle(fontSize: 56, fontWeight: FontWeight.w800, color: AppColors.ink, letterSpacing: -1.5)),
+                ],
+              ),
+              const SizedBox(height: 8),
+              if (_error != null)
+                Text(_error!, style: const TextStyle(color: AppColors.danger, fontSize: 13))
+              else
+                SizedBox(
+                  width: 240,
+                  child: TextField(
+                    controller: _note,
+                    textAlign: TextAlign.center,
+                    decoration: const InputDecoration(
+                      hintText: 'Add a note (optional)',
+                      filled: false,
+                      border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: InputBorder.none,
+                      isDense: true,
+                    ),
+                  ),
+                ),
+            ],
           ),
-          const SizedBox(height: 16),
-          TextField(
-            controller: _note,
-            decoration: const InputDecoration(labelText: 'Note (optional)', prefixIcon: Icon(Icons.notes)),
+        ),
+        _Keypad(onKey: _tap),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+          child: GradientButton(
+            label: 'Request payment',
+            gradient: AppGradients.mint,
+            icon: Icons.contactless_rounded,
+            loading: _busy,
+            onPressed: _start,
           ),
-          if (_error != null) ...[
-            const SizedBox(height: 10),
-            Text(_error!, style: const TextStyle(color: Colors.red)),
-          ],
-          const SizedBox(height: 24),
-          FilledButton.icon(
-            onPressed: _busy ? null : _start,
-            icon: _busy
-                ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                : const Icon(Icons.contactless),
-            label: const Text('Receive payment'),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
 
-class _ErrorView extends StatelessWidget {
-  final String message;
-  final VoidCallback onRetry;
-  const _ErrorView({required this.message, required this.onRetry});
+class _Keypad extends StatelessWidget {
+  final void Function(String) onKey;
+  const _Keypad({required this.onKey});
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.wifi_off, size: 48, color: Colors.black38),
-            const SizedBox(height: 12),
-            Text(message, textAlign: TextAlign.center),
-            const SizedBox(height: 16),
-            OutlinedButton(onPressed: onRetry, child: const Text('Retry')),
-          ],
-        ),
+    const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', '⌫'];
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: GridView.count(
+        crossAxisCount: 3,
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        childAspectRatio: 1.9,
+        children: keys
+            .map((k) => InkWell(
+                  borderRadius: BorderRadius.circular(AppRadius.m),
+                  onTap: () => onKey(k),
+                  child: Center(
+                    child: k == '⌫'
+                        ? const Icon(Icons.backspace_outlined, color: AppColors.ink, size: 22)
+                        : Text(k, style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w600, color: AppColors.ink)),
+                  ),
+                ))
+            .toList(),
       ),
     );
   }

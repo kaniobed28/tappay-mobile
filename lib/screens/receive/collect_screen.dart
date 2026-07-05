@@ -5,12 +5,12 @@ import 'package:qr_flutter/qr_flutter.dart';
 import '../../models/models.dart';
 import '../../services/api_client.dart';
 import '../../services/hce_service.dart';
-import '../../services/nfc_service.dart';
 import '../../services/realtime_service.dart';
 import '../../theme.dart';
+import '../../widgets/ui.dart';
 
-/// The QR/NFC payload string that travels between devices. It only carries the session
-/// id — the customer resolves (and verifies) the full signed session from the backend.
+/// The QR/NFC payload string. It carries only the session id — the customer resolves
+/// and verifies the full signed session from the backend.
 String sessionUri(String id) => 'tappay://s/$id';
 
 class CollectScreen extends StatefulWidget {
@@ -40,7 +40,6 @@ class _CollectScreenState extends State<CollectScreen> {
     _startNfcBroadcast();
   }
 
-  /// Turn this phone into an NFC tag carrying the session — customer just taps us.
   Future<void> _startNfcBroadcast() async {
     if (!await _hce.isSupported()) return;
     final ok = await _hce.broadcast(sessionUri(widget.session.id));
@@ -54,7 +53,6 @@ class _CollectScreenState extends State<CollectScreen> {
     });
   }
 
-  /// Primary path: an instant push from the backend when this session is paid.
   void _listenRealtime() {
     _sub = context.read<RealtimeService>().events.listen((event) {
       if (event.sessionId == widget.session.id && event.type == 'payment.success') {
@@ -63,16 +61,13 @@ class _CollectScreenState extends State<CollectScreen> {
     });
   }
 
-  /// Safety net if the websocket is blocked on the network — reconciles slowly.
   void _startFallbackPoll() {
     _fallbackPoll = Timer.periodic(const Duration(seconds: 12), (_) async {
       if (_paid) return;
       try {
         final txns = await context.read<ApiClient>().history();
-        if (txns.any((t) => t.sessionId == widget.session.id && t.isSuccess)) {
-          _onPaid();
-        }
-      } catch (_) {/* keep trying */}
+        if (txns.any((t) => t.sessionId == widget.session.id && t.isSuccess)) _onPaid();
+      } catch (_) {}
     });
   }
 
@@ -82,7 +77,7 @@ class _CollectScreenState extends State<CollectScreen> {
     _sub?.cancel();
     _fallbackPoll?.cancel();
     _ticker?.cancel();
-    _hce.stop(); // stop broadcasting once paid
+    _hce.stop();
   }
 
   @override
@@ -91,98 +86,90 @@ class _CollectScreenState extends State<CollectScreen> {
     _fallbackPoll?.cancel();
     _ticker?.cancel();
     _hce.stop();
-    context.read<NfcService>().stop();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final s = widget.session;
     return Scaffold(
-      appBar: AppBar(title: const Text('Collecting payment')),
-      body: _paid ? _paidView() : _collectView(s),
+      appBar: AppBar(title: Text(_paid ? 'Paid' : 'Receiving')),
+      body: AnimatedSwitcher(
+        duration: AppMotion.base,
+        child: _paid ? _paidView() : _collectView(),
+      ),
     );
   }
 
-  Widget _collectView(SessionPayload s) {
+  Widget _collectView() {
+    final s = widget.session;
     final expired = _remaining == Duration.zero;
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
+      key: const ValueKey('collect'),
+      padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
       child: Column(
         children: [
-          Text(formatAmount(s.amount, s.currency),
-              style: const TextStyle(fontSize: 36, fontWeight: FontWeight.bold)),
-          if (s.description != null && s.description!.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Text(s.description!, style: const TextStyle(color: Colors.black54)),
-            ),
+          AmountDisplay(amount: s.amount, currency: s.currency, size: 44),
+          if (s.description != null && s.description!.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(s.description!, style: const TextStyle(color: AppColors.inkSoft)),
+          ],
           const SizedBox(height: 24),
           Container(
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.all(22),
             decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: const Color(0xFFE8EAF0)),
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(AppRadius.xl),
+              border: Border.all(color: AppColors.border),
+              boxShadow: AppShadows.raised,
             ),
             child: expired
                 ? const Padding(
-                    padding: EdgeInsets.all(40),
-                    child: Text('Session expired.\nGo back and create a new one.',
-                        textAlign: TextAlign.center),
+                    padding: EdgeInsets.symmetric(vertical: 48, horizontal: 16),
+                    child: Column(children: [
+                      Icon(Icons.timer_off_rounded, size: 40, color: AppColors.inkFaint),
+                      SizedBox(height: 12),
+                      Text('This code expired', style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.ink)),
+                      SizedBox(height: 4),
+                      Text('Go back and start a new request.', style: TextStyle(color: AppColors.inkSoft, fontSize: 13)),
+                    ]),
                   )
-                : QrImageView(
-                    data: sessionUri(s.id),
-                    version: QrVersions.auto,
-                    size: 220,
+                : Column(
+                    children: [
+                      QrImageView(
+                        data: sessionUri(s.id),
+                        version: QrVersions.auto,
+                        size: 220,
+                        eyeStyle: const QrEyeStyle(eyeShape: QrEyeShape.square, color: AppColors.ink),
+                        dataModuleStyle: const QrDataModuleStyle(dataModuleShape: QrDataModuleShape.square, color: AppColors.ink),
+                      ),
+                      const SizedBox(height: 14),
+                      const Text('Ask the customer to scan', style: TextStyle(color: AppColors.inkSoft, fontSize: 13)),
+                    ],
                   ),
           ),
           const SizedBox(height: 16),
-          Text('Ask the customer to scan this code',
-              style: TextStyle(color: Colors.grey.shade600)),
-          const SizedBox(height: 8),
-          if (!expired)
-            Text('Expires in ${_remaining.inMinutes}:${(_remaining.inSeconds % 60).toString().padLeft(2, '0')}',
-                style: const TextStyle(fontWeight: FontWeight.w600)),
-          const SizedBox(height: 24),
+          if (!expired) _CountdownBar(remaining: _remaining, total: 180),
           if (_broadcasting && !expired) ...[
-            const Row(children: [
-              Expanded(child: Divider()),
-              Padding(padding: EdgeInsets.symmetric(horizontal: 12), child: Text('or')),
-              Expanded(child: Divider()),
-            ]),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
               decoration: BoxDecoration(
-                color: AppTheme.brand.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: AppTheme.brand.withValues(alpha: 0.3)),
+                color: AppColors.brand.withValues(alpha: 0.07),
+                borderRadius: BorderRadius.circular(AppRadius.m),
+                border: Border.all(color: AppColors.brand.withValues(alpha: 0.2)),
               ),
-              child: const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.contactless, color: AppTheme.brand),
-                  SizedBox(width: 10),
-                  Flexible(
-                    child: Text(
-                      'NFC broadcasting — customer can tap this phone',
-                      style: TextStyle(fontWeight: FontWeight.w600),
-                    ),
-                  ),
-                ],
-              ),
+              child: Row(children: [
+                const _PulseDot(),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Text('NFC ready — customer can tap this phone',
+                      style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.ink, fontSize: 13.5)),
+                ),
+              ]),
             ),
           ],
-          const SizedBox(height: 24),
-          const Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2)),
-              SizedBox(width: 10),
-              Text('Waiting for payment…', style: TextStyle(color: Colors.black54)),
-            ],
-          ),
+          const SizedBox(height: 28),
+          const WaitingIndicator(label: 'Waiting for payment…'),
         ],
       ),
     );
@@ -190,27 +177,102 @@ class _CollectScreenState extends State<CollectScreen> {
 
   Widget _paidView() {
     return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 96,
-            height: 96,
-            decoration: const BoxDecoration(color: AppTheme.accent, shape: BoxShape.circle),
-            child: const Icon(Icons.check, color: Colors.white, size: 56),
-          ),
-          const SizedBox(height: 20),
-          const Text('Payment received', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 6),
-          Text(formatAmount(widget.session.amount, widget.session.currency),
-              style: const TextStyle(fontSize: 18, color: Colors.black54)),
-          const SizedBox(height: 32),
-          FilledButton(
-            onPressed: () => Navigator.of(context).popUntil((r) => r.isFirst),
-            child: const Text('Done'),
-          ),
-        ],
+      key: const ValueKey('paid'),
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SuccessCheck(size: 104),
+            const SizedBox(height: 28),
+            const Text('Payment received', style: TextStyle(fontSize: 23, fontWeight: FontWeight.w800, color: AppColors.ink, letterSpacing: -0.4)),
+            const SizedBox(height: 8),
+            AmountDisplay(amount: widget.session.amount, currency: widget.session.currency, size: 30, color: AppColors.success),
+            const SizedBox(height: 36),
+            SizedBox(
+              width: double.infinity,
+              child: GradientButton(
+                label: 'Done',
+                gradient: AppGradients.mint,
+                onPressed: () => Navigator.of(context).popUntil((r) => r.isFirst),
+              ),
+            ),
+          ],
+        ),
       ),
+    );
+  }
+}
+
+class _CountdownBar extends StatelessWidget {
+  final Duration remaining;
+  final int total;
+  const _CountdownBar({required this.remaining, required this.total});
+
+  @override
+  Widget build(BuildContext context) {
+    final frac = (remaining.inSeconds / total).clamp(0.0, 1.0);
+    final low = remaining.inSeconds < 30;
+    final mm = remaining.inMinutes;
+    final ss = (remaining.inSeconds % 60).toString().padLeft(2, '0');
+    return Column(
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.schedule_rounded, size: 14, color: low ? AppColors.danger : AppColors.inkSoft),
+            const SizedBox(width: 6),
+            Text('Expires in $mm:$ss',
+                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: low ? AppColors.danger : AppColors.inkSoft)),
+          ],
+        ),
+        const SizedBox(height: 8),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(999),
+          child: LinearProgressIndicator(
+            value: frac,
+            minHeight: 5,
+            backgroundColor: AppColors.surfaceAlt,
+            valueColor: AlwaysStoppedAnimation(low ? AppColors.danger : AppColors.brand),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _PulseDot extends StatefulWidget {
+  const _PulseDot();
+  @override
+  State<_PulseDot> createState() => _PulseDotState();
+}
+
+class _PulseDotState extends State<_PulseDot> with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 1100))..repeat();
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _c,
+      builder: (_, _) {
+        return SizedBox(
+          width: 14,
+          height: 14,
+          child: Stack(alignment: Alignment.center, children: [
+            Container(
+              width: 14 * (0.5 + _c.value),
+              height: 14 * (0.5 + _c.value),
+              decoration: BoxDecoration(color: AppColors.brand.withValues(alpha: (1 - _c.value) * 0.4), shape: BoxShape.circle),
+            ),
+            Container(width: 8, height: 8, decoration: const BoxDecoration(color: AppColors.brand, shape: BoxShape.circle)),
+          ]),
+        );
+      },
     );
   }
 }

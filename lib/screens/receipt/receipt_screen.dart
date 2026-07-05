@@ -4,9 +4,9 @@ import 'package:provider/provider.dart';
 import '../../models/models.dart';
 import '../../services/api_client.dart';
 import '../../theme.dart';
+import '../../widgets/ui.dart';
 
-/// Digital receipt for a transaction. Refresh re-reconciles pending payments
-/// against the provider so the status shown is always authoritative.
+/// Digital receipt for a transaction, with a merchant-only refund action.
 class ReceiptScreen extends StatefulWidget {
   final TransactionModel txn;
   const ReceiptScreen({super.key, required this.txn});
@@ -32,7 +32,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
     try {
       final me = await context.read<ApiClient>().me();
       if (mounted) setState(() => _myUserId = me['id'] as String?);
-    } catch (_) {/* refund button just stays hidden */}
+    } catch (_) {}
   }
 
   bool get _canRefund => _txn.status == 'SUCCESS' && _myUserId != null && _myUserId == _txn.payeeId;
@@ -42,25 +42,40 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
     try {
       final updated = await context.read<ApiClient>().getTransaction(_txn.id);
       if (mounted) setState(() => _txn = updated);
-    } catch (_) {/* keep showing what we have */}
+    } catch (_) {}
     if (mounted) setState(() => _refreshing = false);
   }
 
   Future<void> _refund() async {
     final api = context.read<ApiClient>();
     final messenger = ScaffoldMessenger.of(context);
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showModalBottomSheet<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Refund payment?'),
-        content: Text(
-          'This will refund ${formatAmount(_txn.amount, _txn.currency)} to the customer. '
-          'This cannot be undone.',
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xl))),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.fromLTRB(24, 20, 24, 28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(2)))),
+            const SizedBox(height: 20),
+            const Text('Refund this payment?', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.ink)),
+            const SizedBox(height: 8),
+            Text('${formatAmount(_txn.amount, _txn.currency)} will be returned to the customer. This can’t be undone.',
+                style: const TextStyle(color: AppColors.inkSoft, height: 1.4)),
+            const SizedBox(height: 24),
+            GradientButton(
+              label: 'Refund ${formatAmount(_txn.amount, _txn.currency)}',
+              gradient: const LinearGradient(colors: [Color(0xFFEF4457), Color(0xFFD1233A)]),
+              glow: false,
+              onPressed: () => Navigator.pop(ctx, true),
+            ),
+            const SizedBox(height: 8),
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          ],
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Refund')),
-        ],
       ),
     );
     if (confirmed != true) return;
@@ -81,7 +96,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
   Widget build(BuildContext context) {
     final success = _txn.status == 'SUCCESS';
     final pending = _txn.status == 'PENDING' || _txn.status == 'INITIALIZED';
-    final statusColor = success ? AppTheme.accent : (pending ? Colors.orange : Colors.red);
+    final color = success ? AppColors.success : (pending ? AppColors.warning : (_txn.status == 'REFUNDED' ? AppColors.inkSoft : AppColors.danger));
 
     return Scaffold(
       appBar: AppBar(
@@ -91,76 +106,61 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
             onPressed: _refreshing ? null : _refresh,
             icon: _refreshing
                 ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                : const Icon(Icons.refresh),
-            tooltip: 'Refresh status',
+                : const Icon(Icons.refresh_rounded),
           ),
         ],
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
         child: Column(
           children: [
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  children: [
-                    CircleAvatar(
-                      radius: 28,
-                      backgroundColor: statusColor.withValues(alpha: 0.12),
-                      child: Icon(
-                        success ? Icons.check : (pending ? Icons.hourglass_bottom : Icons.close),
-                        color: statusColor,
-                        size: 30,
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    Text(
-                      formatAmount(_txn.amount, _txn.currency),
-                      style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: statusColor.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        _txn.status,
-                        style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 12),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    const Divider(),
-                    const SizedBox(height: 8),
-                    _row('Reference', _txn.reference),
-                    _row('Date', DateFormat.yMMMMd().add_jm().format(_txn.createdAt)),
-                    if (_txn.description?.isNotEmpty == true) _row('Note', _txn.description!),
-                    _row('Currency', _txn.currency),
-                  ],
-                ),
+            AppCard(
+              padding: const EdgeInsets.all(24),
+              shadow: AppShadows.raised,
+              child: Column(
+                children: [
+                  Container(
+                    width: 60,
+                    height: 60,
+                    decoration: BoxDecoration(color: color.withValues(alpha: 0.12), shape: BoxShape.circle),
+                    child: Icon(success ? Icons.check_rounded : (pending ? Icons.hourglass_bottom_rounded : (_txn.status == 'REFUNDED' ? Icons.undo_rounded : Icons.close_rounded)), color: color, size: 30),
+                  ),
+                  const SizedBox(height: 16),
+                  AmountDisplay(amount: _txn.amount, currency: _txn.currency, size: 36),
+                  const SizedBox(height: 10),
+                  StatusPill(status: _txn.status),
+                  const SizedBox(height: 20),
+                  const Divider(height: 1),
+                  const SizedBox(height: 8),
+                  _row('Reference', _txn.reference),
+                  _row('Date', DateFormat.yMMMMd().add_jm().format(_txn.createdAt)),
+                  if (_txn.description?.isNotEmpty == true) _row('Note', _txn.description!),
+                  _row('Currency', _txn.currency),
+                ],
               ),
             ),
             if (_canRefund) ...[
-              const SizedBox(height: 20),
-              OutlinedButton.icon(
-                onPressed: _refunding ? null : _refund,
-                icon: _refunding
-                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                    : const Icon(Icons.undo),
-                label: const Text('Refund this payment'),
-                style: OutlinedButton.styleFrom(
-                  minimumSize: const Size.fromHeight(52),
-                  foregroundColor: Colors.red,
-                  side: const BorderSide(color: Colors.red),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: _refunding ? null : _refund,
+                  icon: _refunding
+                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.danger))
+                      : const Icon(Icons.undo_rounded, color: AppColors.danger),
+                  label: const Text('Refund this payment', style: TextStyle(color: AppColors.danger)),
+                  style: OutlinedButton.styleFrom(side: const BorderSide(color: AppColors.danger), minimumSize: const Size.fromHeight(52)),
                 ),
               ),
             ],
             const SizedBox(height: 16),
-            const Text(
-              'Verified server-side with the payment provider.',
-              style: TextStyle(color: Colors.black45, fontSize: 12),
+            const Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.verified_user_rounded, size: 14, color: AppColors.inkFaint),
+                SizedBox(width: 6),
+                Text('Verified with the payment provider', style: TextStyle(color: AppColors.inkFaint, fontSize: 12)),
+              ],
             ),
           ],
         ),
@@ -170,18 +170,12 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
 
   Widget _row(String label, String value) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
+      padding: const EdgeInsets.symmetric(vertical: 9),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(width: 90, child: Text(label, style: const TextStyle(color: Colors.black54))),
-          Expanded(
-            child: Text(
-              value,
-              textAlign: TextAlign.right,
-              style: const TextStyle(fontWeight: FontWeight.w600),
-            ),
-          ),
+          SizedBox(width: 92, child: Text(label, style: const TextStyle(color: AppColors.inkSoft))),
+          Expanded(child: Text(value, textAlign: TextAlign.right, style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.ink))),
         ],
       ),
     );

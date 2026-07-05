@@ -4,6 +4,12 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+// Enable Firebase (real auth) automatically once google-services.json is dropped in.
+// Without the file the build works unchanged (app runs in demo-auth mode).
+if (file("google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
+}
+
 android {
     namespace = "com.tappay.tappay"
     compileSdk = maxOf(flutter.compileSdkVersion, 36) // nfc_manager/webview need compileSdk 33+

@@ -11,11 +11,9 @@ String? parseSessionId(String? raw) {
   if (raw == null || raw.isEmpty) return null;
   const prefix = 'tappay://s/';
   if (raw.startsWith(prefix)) return raw.substring(prefix.length);
-  // Fall back to treating the whole value as an id.
   return raw.trim();
 }
 
-/// Customer entry point: scan a QR code, or tap via NFC.
 class ScanScreen extends StatefulWidget {
   const ScanScreen({super.key});
 
@@ -64,8 +62,7 @@ class _ScanScreenState extends State<ScanScreen> {
   Future<void> _tapNfc() async {
     final nfc = context.read<NfcService>();
     final messenger = ScaffoldMessenger.of(context);
-    final available = await nfc.isAvailable();
-    if (!available) {
+    if (!await nfc.isAvailable()) {
       messenger.showSnackBar(const SnackBar(content: Text('NFC not available on this device')));
       return;
     }
@@ -81,48 +78,101 @@ class _ScanScreenState extends State<ScanScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Pay')),
-      body: Column(
+      backgroundColor: Colors.black,
+      extendBodyBehindAppBar: true,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        foregroundColor: Colors.white,
+        title: const Text('Pay', style: TextStyle(color: Colors.white)),
+      ),
+      body: Stack(
+        fit: StackFit.expand,
         children: [
-          Expanded(
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                MobileScanner(controller: _controller, onDetect: _onDetect),
-                // Scan reticle
-                Container(
-                  width: 240,
-                  height: 240,
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.white, width: 3),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                ),
-                if (_handling)
-                  Container(
-                    color: Colors.black54,
-                    child: const Center(child: CircularProgressIndicator(color: Colors.white)),
-                  ),
-              ],
+          MobileScanner(controller: _controller, onDetect: _onDetect),
+          // Dim overlay with a clear window
+          const _ScannerOverlay(),
+          if (_handling)
+            Container(
+              color: Colors.black.withValues(alpha: 0.55),
+              child: const Center(child: CircularProgressIndicator(color: Colors.white)),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              children: [
-                const Text('Scan the merchant QR code',
-                    style: TextStyle(fontWeight: FontWeight.w600)),
-                const SizedBox(height: 12),
-                OutlinedButton.icon(
-                  onPressed: _tapNfc,
-                  icon: const Icon(Icons.contactless, color: AppTheme.brand),
-                  label: const Text('Tap with NFC instead'),
-                  style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(52)),
+          Align(
+            alignment: Alignment.bottomCenter,
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
+              decoration: BoxDecoration(
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Colors.transparent, Colors.black.withValues(alpha: 0.85)],
                 ),
-              ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('Point at the merchant’s QR code',
+                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: _tapNfc,
+                      icon: const Icon(Icons.contactless_rounded, color: Colors.white),
+                      label: const Text('Tap with NFC instead', style: TextStyle(color: Colors.white)),
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: Colors.white38),
+                        minimumSize: const Size.fromHeight(52),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _ScannerOverlay extends StatelessWidget {
+  const _ScannerOverlay();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Container(
+        width: 250,
+        height: 250,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(AppRadius.l),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.9), width: 3),
+        ),
+        child: Stack(
+          children: [
+            _corner(Alignment.topLeft),
+            _corner(Alignment.topRight),
+            _corner(Alignment.bottomLeft),
+            _corner(Alignment.bottomRight),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _corner(Alignment a) {
+    return Align(
+      alignment: a,
+      child: Container(
+        width: 26,
+        height: 26,
+        margin: const EdgeInsets.all(6),
+        decoration: BoxDecoration(
+          color: AppColors.brand,
+          borderRadius: BorderRadius.circular(6),
+        ),
       ),
     );
   }
