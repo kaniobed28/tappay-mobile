@@ -9,6 +9,7 @@ import 'receive/receive_screen.dart';
 import 'pay/scan_screen.dart';
 import 'history/history_screen.dart';
 import 'business/dashboard_screen.dart';
+import 'notifications/notifications_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -76,6 +77,14 @@ class _Dashboard extends StatelessWidget {
                         style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                   ],
                 ),
+              ),
+              IconButton(
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+                ),
+                icon: const Icon(Icons.notifications_none),
+                tooltip: 'Notifications',
               ),
               IconButton(
                 onPressed: () => context.read<AuthService>().signOut(),

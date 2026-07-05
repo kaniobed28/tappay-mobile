@@ -100,6 +100,16 @@ class ApiClient {
     final res = await _dio.get('/payments');
     return (res.data as List).map((e) => TransactionModel.fromJson(e as Map<String, dynamic>)).toList();
   }
+
+  // ---- Notifications ----
+  Future<List<NotificationModel>> notifications() async {
+    final res = await _dio.get('/notifications');
+    return (res.data as List).map((e) => NotificationModel.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  Future<void> markNotificationRead(String id) async {
+    await _dio.patch('/notifications/$id/read');
+  }
 }
 
 /// Extracts a human-friendly message from a Dio error.

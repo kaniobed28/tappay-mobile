@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import '../../models/models.dart';
 import '../../services/api_client.dart';
+import '../../services/hce_service.dart';
 import '../../services/nfc_service.dart';
 import '../../services/realtime_service.dart';
 import '../../theme.dart';
@@ -21,11 +22,12 @@ class CollectScreen extends StatefulWidget {
 }
 
 class _CollectScreenState extends State<CollectScreen> {
+  final HceService _hce = HceService();
   StreamSubscription<PaymentEvent>? _sub;
   Timer? _fallbackPoll;
   Timer? _ticker;
   bool _paid = false;
-  bool _nfcAvailable = false;
+  bool _broadcasting = false;
   Duration _remaining = Duration.zero;
 
   @override
@@ -35,12 +37,14 @@ class _CollectScreenState extends State<CollectScreen> {
     _listenRealtime();
     _startFallbackPoll();
     _startTicker();
-    _checkNfc();
+    _startNfcBroadcast();
   }
 
-  Future<void> _checkNfc() async {
-    final ok = await context.read<NfcService>().isAvailable();
-    if (mounted) setState(() => _nfcAvailable = ok);
+  /// Turn this phone into an NFC tag carrying the session — customer just taps us.
+  Future<void> _startNfcBroadcast() async {
+    if (!await _hce.isSupported()) return;
+    final ok = await _hce.broadcast(sessionUri(widget.session.id));
+    if (mounted) setState(() => _broadcasting = ok);
   }
 
   void _startTicker() {
@@ -78,18 +82,7 @@ class _CollectScreenState extends State<CollectScreen> {
     _sub?.cancel();
     _fallbackPoll?.cancel();
     _ticker?.cancel();
-  }
-
-  Future<void> _broadcastNfc() async {
-    final nfc = context.read<NfcService>();
-    final messenger = ScaffoldMessenger.of(context);
-    try {
-      messenger.showSnackBar(const SnackBar(content: Text('Hold the customer device near…')));
-      await nfc.writeSessionId(sessionUri(widget.session.id));
-      messenger.showSnackBar(const SnackBar(content: Text('Sent over NFC')));
-    } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text('NFC failed: $e')));
-    }
+    _hce.stop(); // stop broadcasting once paid
   }
 
   @override
@@ -97,6 +90,7 @@ class _CollectScreenState extends State<CollectScreen> {
     _sub?.cancel();
     _fallbackPoll?.cancel();
     _ticker?.cancel();
+    _hce.stop();
     context.read<NfcService>().stop();
     super.dispose();
   }
@@ -151,18 +145,33 @@ class _CollectScreenState extends State<CollectScreen> {
             Text('Expires in ${_remaining.inMinutes}:${(_remaining.inSeconds % 60).toString().padLeft(2, '0')}',
                 style: const TextStyle(fontWeight: FontWeight.w600)),
           const SizedBox(height: 24),
-          if (_nfcAvailable && !expired) ...[
+          if (_broadcasting && !expired) ...[
             const Row(children: [
               Expanded(child: Divider()),
               Padding(padding: EdgeInsets.symmetric(horizontal: 12), child: Text('or')),
               Expanded(child: Divider()),
             ]),
             const SizedBox(height: 16),
-            OutlinedButton.icon(
-              onPressed: _broadcastNfc,
-              icon: const Icon(Icons.contactless),
-              label: const Text('Send via NFC'),
-              style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(52)),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              decoration: BoxDecoration(
+                color: AppTheme.brand.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: AppTheme.brand.withValues(alpha: 0.3)),
+              ),
+              child: const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.contactless, color: AppTheme.brand),
+                  SizedBox(width: 10),
+                  Flexible(
+                    child: Text(
+                      'NFC broadcasting — customer can tap this phone',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
           const SizedBox(height: 24),

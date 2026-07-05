@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../models/models.dart';
 import '../../services/api_client.dart';
 import '../../theme.dart';
+import '../receipt/receipt_screen.dart';
 
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
@@ -94,6 +95,10 @@ class _TxnTile extends StatelessWidget {
     };
     return Card(
       child: ListTile(
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => ReceiptScreen(txn: txn)),
+        ),
         leading: CircleAvatar(
           backgroundColor: statusColor.withValues(alpha: 0.12),
           child: Icon(Icons.swap_horiz, color: statusColor),
