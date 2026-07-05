@@ -23,6 +23,15 @@ migrate_working_dir/
 # is commented out by default.
 #.vscode/
 
+# Firebase config (contains project keys — keep out of git)
+**/google-services.json
+**/GoogleService-Info.plist
+
+# Release signing — NEVER commit (losing the keystore = can't update the app)
+android/key.properties
+**/*.jks
+**/*.keystore
+
 # Flutter/Dart/Pub related
 **/doc/api/
 **/ios/Flutter/.last_build_id

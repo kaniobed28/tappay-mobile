@@ -7,7 +7,7 @@
     <uses-feature android:name="android.hardware.camera" android:required="false"/>
 
     <application
-        android:label="tappay"
+        android:label="TapPay"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
