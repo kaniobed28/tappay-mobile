@@ -1,0 +1,45 @@
+name: tappay
+description: "TapPay — contactless peer-to-peer payments (NFC + QR)."
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.12.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+
+  # Auth
+  firebase_core: ^3.8.1
+  firebase_auth: ^5.3.4
+  firebase_messaging: ^15.1.6  # FCM push (active once Firebase is configured)
+
+  # Realtime
+  socket_io_client: ^3.0.2
+
+  # State
+  provider: ^6.1.2
+
+  # Networking
+  dio: ^5.7.0
+
+  # Contactless
+  nfc_manager: ^3.5.0        # NFC read/broadcast
+  mobile_scanner: ^5.2.3     # QR scanning (camera)
+  qr_flutter: ^4.1.0         # QR rendering
+
+  # Checkout
+  webview_flutter: ^4.10.0   # Paystack authorization page
+
+  # Utils
+  intl: ^0.19.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
