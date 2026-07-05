@@ -19,6 +19,43 @@ class NfcService {
     }
   }
 
+  /// Continuously listens for a tapped TapPay device/tag until [stop] is called.
+  /// Calls [onId] with the session payload when read; [onStatus] reports progress/hints.
+  /// Returns false if NFC isn't available (so the UI can guide the user).
+  Future<bool> startContinuousRead({
+    required void Function(String id) onId,
+    void Function(String message)? onStatus,
+  }) async {
+    if (!await isAvailable()) return false;
+    try {
+      await NfcManager.instance.startSession(
+        alertMessage: 'Hold near the other phone to pay',
+        onDiscovered: (NfcTag tag) async {
+          try {
+            final ndef = Ndef.from(tag);
+            if (ndef == null) {
+              onStatus?.call('That tag isn’t a TapPay request');
+              return;
+            }
+            final message = await ndef.read();
+            final text = _firstText(message);
+            if (text != null && text.isNotEmpty) {
+              onId(text);
+            } else {
+              onStatus?.call('No TapPay data found — make sure they’re on the Receiving screen');
+            }
+          } catch (_) {
+            onStatus?.call('Couldn’t read — hold the phones together a moment longer');
+          }
+          // Keep the session open; the screen stops it on navigate/dispose.
+        },
+      );
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// Reads a session id from a tapped tag/device. Completes with the id or throws.
   Future<String> readSessionId({Duration timeout = const Duration(seconds: 30)}) async {
     final completer = Completer<String>();

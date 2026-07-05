@@ -14,6 +14,8 @@ String? parseSessionId(String? raw) {
   return raw.trim();
 }
 
+enum _Nfc { checking, ready, off }
+
 class ScanScreen extends StatefulWidget {
   const ScanScreen({super.key});
 
@@ -24,9 +26,33 @@ class ScanScreen extends StatefulWidget {
 class _ScanScreenState extends State<ScanScreen> {
   final MobileScannerController _controller = MobileScannerController();
   bool _handling = false;
+  _Nfc _nfc = _Nfc.checking;
+  String? _nfcHint;
+
+  @override
+  void initState() {
+    super.initState();
+    // Start NFC listening automatically, in parallel with the QR scanner.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _startNfc());
+  }
+
+  Future<void> _startNfc() async {
+    final nfc = context.read<NfcService>();
+    final ok = await nfc.startContinuousRead(
+      onId: (raw) {
+        final id = parseSessionId(raw);
+        if (id != null) _resolveAndReview(id);
+      },
+      onStatus: (msg) {
+        if (mounted) setState(() => _nfcHint = msg);
+      },
+    );
+    if (mounted) setState(() => _nfc = ok ? _Nfc.ready : _Nfc.off);
+  }
 
   @override
   void dispose() {
+    context.read<NfcService>().stop();
     _controller.dispose();
     super.dispose();
   }
@@ -35,8 +61,10 @@ class _ScanScreenState extends State<ScanScreen> {
     if (_handling) return;
     setState(() => _handling = true);
     final api = context.read<ApiClient>();
+    final nfc = context.read<NfcService>();
     final navigator = Navigator.of(context);
     final messenger = ScaffoldMessenger.of(context);
+    await nfc.stop();
     try {
       final session = await api.resolveSession(sessionId);
       if (!mounted) return;
@@ -44,7 +72,10 @@ class _ScanScreenState extends State<ScanScreen> {
     } catch (e) {
       messenger.showSnackBar(SnackBar(content: Text(apiErrorMessage(e))));
     } finally {
-      if (mounted) setState(() => _handling = false);
+      if (mounted) {
+        setState(() => _handling = false);
+        _startNfc(); // resume listening after returning
+      }
     }
   }
 
@@ -56,22 +87,6 @@ class _ScanScreenState extends State<ScanScreen> {
         _resolveAndReview(id);
         break;
       }
-    }
-  }
-
-  Future<void> _tapNfc() async {
-    final nfc = context.read<NfcService>();
-    final messenger = ScaffoldMessenger.of(context);
-    if (!await nfc.isAvailable()) {
-      messenger.showSnackBar(const SnackBar(content: Text('NFC not available on this device')));
-      return;
-    }
-    try {
-      final raw = await nfc.readSessionId();
-      final id = parseSessionId(raw);
-      if (id != null) await _resolveAndReview(id);
-    } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text('NFC: $e')));
     }
   }
 
@@ -89,49 +104,108 @@ class _ScanScreenState extends State<ScanScreen> {
         fit: StackFit.expand,
         children: [
           MobileScanner(controller: _controller, onDetect: _onDetect),
-          // Dim overlay with a clear window
           const _ScannerOverlay(),
           if (_handling)
             Container(
-              color: Colors.black.withValues(alpha: 0.55),
+              color: Colors.black.withValues(alpha: 0.6),
               child: const Center(child: CircularProgressIndicator(color: Colors.white)),
             ),
           Align(
             alignment: Alignment.bottomCenter,
             child: Container(
               width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
+              padding: const EdgeInsets.fromLTRB(20, 28, 20, 30),
               decoration: BoxDecoration(
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  colors: [Colors.transparent, Colors.black.withValues(alpha: 0.85)],
+                  colors: [Colors.transparent, Colors.black.withValues(alpha: 0.88)],
                 ),
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Text('Point at the merchant’s QR code',
-                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                  const Text('Scan the merchant’s QR code',
+                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 15)),
+                  const SizedBox(height: 4),
+                  const Text('…or tap the two phones back-to-back',
+                      style: TextStyle(color: Colors.white70, fontSize: 13)),
                   const SizedBox(height: 16),
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      onPressed: _tapNfc,
-                      icon: const Icon(Icons.contactless_rounded, color: Colors.white),
-                      label: const Text('Tap with NFC instead', style: TextStyle(color: Colors.white)),
-                      style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: Colors.white38),
-                        minimumSize: const Size.fromHeight(52),
-                      ),
-                    ),
-                  ),
+                  _NfcStatus(state: _nfc, hint: _nfcHint),
                 ],
               ),
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _NfcStatus extends StatelessWidget {
+  final _Nfc state;
+  final String? hint;
+  const _NfcStatus({required this.state, required this.hint});
+
+  @override
+  Widget build(BuildContext context) {
+    final (icon, color, label) = switch (state) {
+      _Nfc.checking => (Icons.hourglass_empty_rounded, Colors.white70, 'Preparing NFC…'),
+      _Nfc.ready => (Icons.contactless_rounded, AppColors.accent, hint ?? 'NFC ready — hold near the other phone'),
+      _Nfc.off => (Icons.nfc_rounded, AppColors.warning, 'NFC is off — turn it on in settings, or use QR'),
+    };
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(AppRadius.chip),
+        border: Border.all(color: color.withValues(alpha: 0.5)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (state == _Nfc.ready) const _LivePulse() else Icon(icon, color: color, size: 18),
+          const SizedBox(width: 10),
+          Flexible(
+            child: Text(label,
+                textAlign: TextAlign.center,
+                style: TextStyle(color: color, fontWeight: FontWeight.w600, fontSize: 13)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LivePulse extends StatefulWidget {
+  const _LivePulse();
+  @override
+  State<_LivePulse> createState() => _LivePulseState();
+}
+
+class _LivePulseState extends State<_LivePulse> with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 1000))..repeat();
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _c,
+      builder: (_, _) => SizedBox(
+        width: 18,
+        height: 18,
+        child: Stack(alignment: Alignment.center, children: [
+          Container(
+            width: 18 * (0.5 + _c.value),
+            height: 18 * (0.5 + _c.value),
+            decoration: BoxDecoration(color: AppColors.accent.withValues(alpha: (1 - _c.value) * 0.5), shape: BoxShape.circle),
+          ),
+          const Icon(Icons.contactless_rounded, color: AppColors.accent, size: 16),
+        ]),
       ),
     );
   }
@@ -144,20 +218,18 @@ class _ScannerOverlay extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: Container(
-        width: 250,
-        height: 250,
+        width: 248,
+        height: 248,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(AppRadius.l),
           border: Border.all(color: Colors.white.withValues(alpha: 0.9), width: 3),
         ),
-        child: Stack(
-          children: [
-            _corner(Alignment.topLeft),
-            _corner(Alignment.topRight),
-            _corner(Alignment.bottomLeft),
-            _corner(Alignment.bottomRight),
-          ],
-        ),
+        child: Stack(children: [
+          _corner(Alignment.topLeft),
+          _corner(Alignment.topRight),
+          _corner(Alignment.bottomLeft),
+          _corner(Alignment.bottomRight),
+        ]),
       ),
     );
   }
@@ -169,10 +241,7 @@ class _ScannerOverlay extends StatelessWidget {
         width: 26,
         height: 26,
         margin: const EdgeInsets.all(6),
-        decoration: BoxDecoration(
-          color: AppColors.brand,
-          borderRadius: BorderRadius.circular(6),
-        ),
+        decoration: BoxDecoration(color: AppColors.brand, borderRadius: BorderRadius.circular(6)),
       ),
     );
   }
