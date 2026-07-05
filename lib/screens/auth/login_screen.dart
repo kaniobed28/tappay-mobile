@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../services/auth_service.dart';
 import '../../theme.dart';
 import '../../widgets/ui.dart';
+import 'phone_login_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -45,6 +46,22 @@ class _LoginScreenState extends State<LoginScreen> {
       if (mounted) setState(() => _busy = false);
     }
   }
+
+  Future<void> _google() async {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await context.read<AuthService>().signInWithGoogle();
+    } catch (e) {
+      setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  void _phone() => Navigator.push(context, MaterialPageRoute(builder: (_) => const PhoneLoginScreen()));
 
   @override
   Widget build(BuildContext context) {
@@ -142,6 +159,27 @@ class _LoginScreenState extends State<LoginScreen> {
                             loading: _busy,
                             onPressed: _submit,
                           ),
+                          const SizedBox(height: 18),
+                          Row(children: const [
+                            Expanded(child: Divider()),
+                            Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 12),
+                              child: Text('or', style: TextStyle(color: AppColors.inkFaint, fontSize: 12)),
+                            ),
+                            Expanded(child: Divider()),
+                          ]),
+                          const SizedBox(height: 16),
+                          _SocialButton(
+                            icon: _GoogleG(),
+                            label: 'Continue with Google',
+                            onTap: _busy ? null : _google,
+                          ),
+                          const SizedBox(height: 10),
+                          _SocialButton(
+                            icon: const Icon(Icons.phone_iphone_rounded, size: 20, color: AppColors.ink),
+                            label: 'Continue with phone',
+                            onTap: _busy ? null : _phone,
+                          ),
                         ],
                       ),
                     ),
@@ -170,6 +208,70 @@ class _LoginScreenState extends State<LoginScreen> {
       ),
     );
   }
+}
+
+class _SocialButton extends StatelessWidget {
+  final Widget icon;
+  final String label;
+  final VoidCallback? onTap;
+  const _SocialButton({required this.icon, required this.label, this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(AppRadius.m),
+      child: Container(
+        height: 52,
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(AppRadius.m),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            icon,
+            const SizedBox(width: 10),
+            Text(label, style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.ink)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A compact multi-colour Google "G".
+class _GoogleG extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(width: 20, height: 20, child: CustomPaint(painter: _GPainter()));
+  }
+}
+
+class _GPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final r = size.width / 2;
+    final c = Offset(r, r);
+    final stroke = size.width * 0.22;
+    final rect = Rect.fromCircle(center: c, radius: r - stroke / 2);
+    final p = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = stroke
+      ..strokeCap = StrokeCap.butt;
+    // four coloured arcs
+    canvas.drawArc(rect, -0.35, 1.5, false, p..color = const Color(0xFF4285F4)); // blue
+    canvas.drawArc(rect, 1.15, 1.5, false, p..color = const Color(0xFF34A853)); // green
+    canvas.drawArc(rect, 2.65, 1.2, false, p..color = const Color(0xFFFBBC05)); // yellow
+    canvas.drawArc(rect, 3.85, 1.5, false, p..color = const Color(0xFFEA4335)); // red
+    // crossbar
+    final bar = Paint()..color = const Color(0xFF4285F4);
+    canvas.drawRect(Rect.fromLTWH(r, r - stroke / 2, r - stroke / 2, stroke), bar);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 /// Subtle dotted texture over the brand header.

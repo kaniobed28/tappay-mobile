@@ -1,6 +1,15 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+
+/// Thrown when a provider that needs a live Firebase project is used in demo mode.
+class FirebaseRequired implements Exception {
+  final String message;
+  FirebaseRequired(this.message);
+  @override
+  String toString() => message;
+}
 
 /// Wraps Firebase Auth, with a graceful **dev fallback** so the app is usable before a
 /// Firebase project is wired up. When Firebase can't initialize (no config files), the
@@ -64,8 +73,60 @@ class AuthService extends ChangeNotifier {
     notifyListeners();
   }
 
+  static const _needsFirebase =
+      'This sign-in method needs Firebase. Enable it (see FIREBASE.md), then rebuild.';
+
+  /// Google sign-in. Requires a live Firebase project + OAuth client (google-services.json).
+  Future<void> signInWithGoogle() async {
+    if (!_firebaseReady) throw FirebaseRequired(_needsFirebase);
+    final googleUser = await GoogleSignIn().signIn();
+    if (googleUser == null) return; // user cancelled
+    final googleAuth = await googleUser.authentication;
+    final credential = GoogleAuthProvider.credential(
+      accessToken: googleAuth.accessToken,
+      idToken: googleAuth.idToken,
+    );
+    await FirebaseAuth.instance.signInWithCredential(credential);
+  }
+
+  /// Starts phone verification. Requires Firebase with the Phone provider enabled.
+  /// `codeSent` receives a verificationId to pass to [confirmPhoneCode].
+  Future<void> startPhoneSignIn({
+    required String phoneNumber,
+    required void Function(String verificationId) codeSent,
+    required void Function(String message) onError,
+  }) async {
+    if (!_firebaseReady) {
+      onError(_needsFirebase);
+      return;
+    }
+    await FirebaseAuth.instance.verifyPhoneNumber(
+      phoneNumber: phoneNumber.trim(),
+      verificationCompleted: (cred) async {
+        try {
+          await FirebaseAuth.instance.signInWithCredential(cred);
+        } catch (_) {/* auto-retrieval; ignore if manual code also entered */}
+      },
+      verificationFailed: (e) => onError(e.message ?? 'Verification failed'),
+      codeSent: (verificationId, _) => codeSent(verificationId),
+      codeAutoRetrievalTimeout: (_) {},
+    );
+  }
+
+  /// Completes phone sign-in with the SMS code the user typed.
+  Future<void> confirmPhoneCode(String verificationId, String smsCode) async {
+    final credential = PhoneAuthProvider.credential(
+      verificationId: verificationId,
+      smsCode: smsCode.trim(),
+    );
+    await FirebaseAuth.instance.signInWithCredential(credential);
+  }
+
   Future<void> signOut() async {
     if (_firebaseReady) {
+      try {
+        await GoogleSignIn().signOut();
+      } catch (_) {/* not signed in via Google */}
       await FirebaseAuth.instance.signOut();
     } else {
       _devUid = null;
