@@ -25,6 +25,7 @@ class ScanScreen extends StatefulWidget {
 
 class _ScanScreenState extends State<ScanScreen> {
   final MobileScannerController _controller = MobileScannerController();
+  late final NfcService _nfcService;
   bool _handling = false;
   _Nfc _nfc = _Nfc.checking;
   String? _nfcHint;
@@ -32,13 +33,14 @@ class _ScanScreenState extends State<ScanScreen> {
   @override
   void initState() {
     super.initState();
+    // Grab the service now — context lookups are not allowed in dispose().
+    _nfcService = context.read<NfcService>();
     // Start NFC listening automatically, in parallel with the QR scanner.
     WidgetsBinding.instance.addPostFrameCallback((_) => _startNfc());
   }
 
   Future<void> _startNfc() async {
-    final nfc = context.read<NfcService>();
-    final ok = await nfc.startContinuousRead(
+    final ok = await _nfcService.startContinuousRead(
       onId: (raw) {
         final id = parseSessionId(raw);
         if (id != null) _resolveAndReview(id);
@@ -52,19 +54,18 @@ class _ScanScreenState extends State<ScanScreen> {
 
   @override
   void dispose() {
-    context.read<NfcService>().stop();
+    _nfcService.stop();
     _controller.dispose();
     super.dispose();
   }
 
   Future<void> _resolveAndReview(String sessionId) async {
-    if (_handling) return;
+    if (_handling || !mounted) return;
     setState(() => _handling = true);
     final api = context.read<ApiClient>();
-    final nfc = context.read<NfcService>();
     final navigator = Navigator.of(context);
     final messenger = ScaffoldMessenger.of(context);
-    await nfc.stop();
+    await _nfcService.stop();
     try {
       final session = await api.resolveSession(sessionId);
       if (!mounted) return;

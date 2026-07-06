@@ -45,8 +45,23 @@ class TapPayApp extends StatelessWidget {
   }
 }
 
-class _Root extends StatelessWidget {
+class _Root extends StatefulWidget {
   const _Root();
+
+  @override
+  State<_Root> createState() => _RootState();
+}
+
+class _RootState extends State<_Root> {
+  @override
+  void initState() {
+    super.initState();
+    // Wake the backend as soon as the app opens so the first real request
+    // (login, history, session create) doesn't hit the cold-start delay.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) context.read<ApiClient>().warmUp();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {

@@ -29,11 +29,8 @@ class _HomeScreenState extends State<HomeScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
       final auth = context.read<AuthService>();
-      final token = await auth.getIdToken();
-      if (token != null && mounted) context.read<RealtimeService>().connect(token);
-      if (mounted) {
-        await PushService().register(context.read<ApiClient>(), firebaseReady: auth.firebaseReady);
-      }
+      context.read<RealtimeService>().connect(auth.getIdToken);
+      await PushService().register(context.read<ApiClient>(), firebaseReady: auth.firebaseReady);
     });
   }
 

@@ -2,11 +2,14 @@
 class AppConfig {
   /// Base URL of the TapPay backend API.
   ///
-  /// Android emulator reaches the host machine via 10.0.2.2.
-  /// Override at build time: `--dart-define=API_BASE_URL=https://api.example.com/api`.
+  /// Defaults to the deployed backend so the app works on any device out of the box.
+  /// For local development override at build time, e.g.
+  /// `flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8090/api`
+  /// (10.0.2.2 = host machine from the Android emulator; the local backend
+  /// listens on the port set in backend/.env — currently 8090).
   static const String apiBaseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://10.0.2.2:3000/api',
+    defaultValue: 'https://tappay-api.onrender.com/api',
   );
 
   /// Deep-link scheme the Paystack callback redirects to.

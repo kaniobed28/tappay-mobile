@@ -29,17 +29,17 @@ class _ReviewScreenState extends State<ReviewScreen> {
     final navigator = Navigator.of(context);
     try {
       final PaymentResult result = await api.pay(widget.session.id);
+      if (!mounted) return;
       if (result.authorizationUrl == null) {
         setState(() => _error = 'Provider did not return a checkout URL');
         return;
       }
-      if (!mounted) return;
       await navigator.push(MaterialPageRoute(builder: (_) => CheckoutScreen(url: result.authorizationUrl!)));
       final txn = await api.getTransaction(result.transactionId);
       if (!mounted) return;
       navigator.pushReplacement(MaterialPageRoute(builder: (_) => ResultScreen(txn: txn)));
     } catch (e) {
-      setState(() => _error = apiErrorMessage(e));
+      if (mounted) setState(() => _error = apiErrorMessage(e));
     } finally {
       if (mounted) setState(() => _busy = false);
     }

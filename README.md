@@ -14,11 +14,19 @@ provider-hosted checkout (Paystack by default).
 ```bash
 cd mobile
 flutter pub get
-flutter run --dart-define=API_BASE_URL=http://10.0.2.2:3000/api
+flutter run                # talks to the deployed API by default
+```
+
+With no `--dart-define`, the app uses the deployed backend
+(`https://tappay-api.onrender.com/api`), so it works on any device out of the box.
+To point at a local backend instead (port comes from `backend/.env`, currently **8090**):
+
+```bash
+flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8090/api
 ```
 
 `10.0.2.2` is the Android emulator's alias for your host machine. On a physical device,
-use your machine's LAN IP (e.g. `http://192.168.1.20:3000/api`).
+use your machine's LAN IP (e.g. `http://192.168.1.20:8090/api`).
 
 ## Auth: dev mode vs Firebase
 

@@ -40,17 +40,24 @@ class RealtimeService {
   Stream<PaymentEvent> get events => _controller.stream;
   bool get connected => _socket?.connected ?? false;
 
-  /// Connect (or reconnect) with the current auth token.
-  void connect(String token) {
+  /// Connect (or reconnect). [tokenProvider] is called on every connection
+  /// attempt so reconnects always carry a fresh token — Firebase ID tokens
+  /// expire hourly, and a stale one made the socket silently die for good.
+  void connect(Future<String?> Function() tokenProvider) {
     disconnect();
     final socket = io.io(
       AppConfig.socketUrl,
       io.OptionBuilder()
           .setTransports(['websocket'])
           .disableAutoConnect()
-          .setAuth({'token': token})
           .build(),
     );
+    socket.auth = (dynamic cb) {
+      tokenProvider().then(
+        (token) => cb({'token': token ?? ''}),
+        onError: (_) => cb({'token': ''}),
+      );
+    };
     socket.onConnect((_) => debugPrint('Realtime connected'));
     socket.onConnectError((e) => debugPrint('Realtime connect error: $e'));
     socket.on('payment.success', (d) => _emit('payment.success', d));
