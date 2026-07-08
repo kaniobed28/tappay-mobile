@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../models/models.dart';
 import '../../services/api_client.dart';
+import '../../services/receipt_pdf_service.dart';
 import '../../theme.dart';
 import '../../widgets/ui.dart';
 
@@ -19,6 +20,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
   late TransactionModel _txn;
   bool _refreshing = false;
   bool _refunding = false;
+  bool _sharing = false;
   String? _myUserId;
 
   @override
@@ -36,6 +38,21 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
   }
 
   bool get _canRefund => _txn.status == 'SUCCESS' && _myUserId != null && _myUserId == _txn.payeeId;
+
+  /// A receipt PDF only makes sense for a settled transaction.
+  bool get _canShare => _txn.status == 'SUCCESS' || _txn.status == 'REFUNDED';
+
+  Future<void> _share() async {
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _sharing = true);
+    try {
+      await const ReceiptPdfService().shareReceipt(context, _txn);
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text('Couldn’t create receipt: ${apiErrorMessage(e)}')));
+    } finally {
+      if (mounted) setState(() => _sharing = false);
+    }
+  }
 
   Future<void> _refresh() async {
     setState(() => _refreshing = true);
@@ -139,6 +156,15 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
                 ],
               ),
             ),
+            if (_canShare) ...[
+              const SizedBox(height: 16),
+              GradientButton(
+                label: 'Share receipt',
+                icon: Icons.ios_share_rounded,
+                loading: _sharing,
+                onPressed: _sharing ? null : _share,
+              ),
+            ],
             if (_canRefund) ...[
               const SizedBox(height: 16),
               SizedBox(
