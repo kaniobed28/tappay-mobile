@@ -41,6 +41,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         'payment_success' => (icon: Icons.check_circle_rounded, color: AppColors.brand),
         'payment_failed' => (icon: Icons.error_rounded, color: AppColors.danger),
         'payment_refunded' || 'refund_issued' => (icon: Icons.undo_rounded, color: AppColors.inkSoft),
+        'request_received' => (icon: Icons.request_page_rounded, color: AppColors.brand),
+        'request_paid' => (icon: Icons.check_circle_rounded, color: AppColors.success),
+        'request_declined' => (icon: Icons.cancel_rounded, color: AppColors.danger),
+        'request_cancelled' => (icon: Icons.remove_circle_rounded, color: AppColors.inkSoft),
         _ => (icon: Icons.notifications_rounded, color: AppColors.brand),
       };
 

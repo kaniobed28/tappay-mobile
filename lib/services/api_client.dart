@@ -137,6 +137,45 @@ class ApiClient {
     return (res.data as List).map((e) => TransactionModel.fromJson(e as Map<String, dynamic>)).toList();
   }
 
+  // ---- Money requests ----
+  /// Ask a known user (by [target] email or phone) to pay you [amount] (minor units).
+  Future<PaymentRequestModel> createRequest({required String target, required int amount, String? note}) async {
+    final res = await _dio.post('/payments/requests', data: {
+      'target': target,
+      'amount': amount,
+      if (note != null && note.isNotEmpty) 'note': note,
+    });
+    return PaymentRequestModel.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  /// Requests I've been asked to pay.
+  Future<List<PaymentRequestModel>> incomingRequests() async {
+    final res = await _dio.get('/payments/requests/incoming');
+    return (res.data as List).map((e) => PaymentRequestModel.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  /// Requests I've sent out.
+  Future<List<PaymentRequestModel>> outgoingRequests() async {
+    final res = await _dio.get('/payments/requests/outgoing');
+    return (res.data as List).map((e) => PaymentRequestModel.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  Future<PaymentRequestModel> declineRequest(String id) async {
+    final res = await _dio.post('/payments/requests/$id/decline');
+    return PaymentRequestModel.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  Future<PaymentRequestModel> cancelRequest(String id) async {
+    final res = await _dio.post('/payments/requests/$id/cancel');
+    return PaymentRequestModel.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  /// Pay a request — returns checkout info (authorization URL) like the normal pay flow.
+  Future<PaymentResult> payRequest(String id) async {
+    final res = await _dio.post('/payments/requests/$id/pay');
+    return PaymentResult.fromJson(res.data as Map<String, dynamic>);
+  }
+
   // ---- Notifications ----
   Future<List<NotificationModel>> notifications() async {
     final res = await _dio.get('/notifications');

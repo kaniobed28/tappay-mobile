@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/auth_service.dart';
@@ -11,6 +12,8 @@ import 'pay/scan_screen.dart';
 import 'history/history_screen.dart';
 import 'business/dashboard_screen.dart';
 import 'notifications/notifications_screen.dart';
+import 'request/request_money_screen.dart';
+import 'request/requests_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -21,6 +24,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _index = 0;
+  StreamSubscription<RequestEvent>? _reqSub;
 
   @override
   void initState() {
@@ -29,9 +33,30 @@ class _HomeScreenState extends State<HomeScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
       final auth = context.read<AuthService>();
-      context.read<RealtimeService>().connect(auth.getIdToken);
+      final realtime = context.read<RealtimeService>();
+      realtime.connect(auth.getIdToken);
+      // Surface incoming money requests app-wide with a tappable snackbar.
+      _reqSub = realtime.requestEvents.listen(_onRequestEvent);
       await PushService().register(context.read<ApiClient>(), firebaseReady: auth.firebaseReady);
     });
+  }
+
+  void _onRequestEvent(RequestEvent e) {
+    if (!mounted || e.type != 'request.created') return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text('New payment request: ${formatAmount(e.amount, e.currency)}'),
+      action: SnackBarAction(
+        label: 'View',
+        textColor: AppColors.accent,
+        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RequestsScreen())),
+      ),
+    ));
+  }
+
+  @override
+  void dispose() {
+    _reqSub?.cancel();
+    super.dispose();
   }
 
   @override
@@ -112,6 +137,30 @@ class _Dashboard extends StatelessWidget {
                   subtitle: 'Get paid',
                   gradient: AppGradients.mint,
                   onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ReceiveScreen())),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: _ActionTile(
+                  icon: Icons.request_page_rounded,
+                  label: 'Request',
+                  subtitle: 'Ask to get paid',
+                  gradient: AppGradients.night,
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RequestMoneyScreen())),
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: _ActionTile(
+                  icon: Icons.inbox_rounded,
+                  label: 'Requests',
+                  subtitle: 'Pending & sent',
+                  gradient: AppGradients.brand,
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RequestsScreen())),
                 ),
               ),
             ],
