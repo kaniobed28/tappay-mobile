@@ -182,61 +182,76 @@ class _AmountFormState extends State<_AmountForm> {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Expanded(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(widget.merchant.businessName, style: const TextStyle(color: AppColors.inkSoft, fontWeight: FontWeight.w600)),
-              const SizedBox(height: 14),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.baseline,
-                textBaseline: TextBaseline.alphabetic,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: Text(widget.merchant.currency,
-                        style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: AppColors.inkFaint)),
-                  ),
-                  Text(_amount, style: const TextStyle(fontSize: 56, fontWeight: FontWeight.w800, color: AppColors.ink, letterSpacing: -1.5)),
-                ],
-              ),
-              const SizedBox(height: 8),
-              if (_error != null)
-                Text(_error!, style: const TextStyle(color: AppColors.danger, fontSize: 13))
-              else
-                SizedBox(
-                  width: 240,
-                  child: TextField(
-                    controller: _note,
-                    textAlign: TextAlign.center,
-                    decoration: const InputDecoration(
-                      hintText: 'Add a note (optional)',
-                      filled: false,
-                      border: InputBorder.none,
-                      enabledBorder: InputBorder.none,
-                      focusedBorder: InputBorder.none,
-                      isDense: true,
-                    ),
+    // Fill the screen on a tall (phone) viewport, but scroll instead of
+    // overflowing when the viewport is short (web/landscape/split-screen).
+    return LayoutBuilder(
+      builder: (context, constraints) => SingleChildScrollView(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: constraints.maxHeight),
+          child: IntrinsicHeight(
+            child: Column(
+              children: [
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const SizedBox(height: 24),
+                      Text(widget.merchant.businessName,
+                          style: const TextStyle(color: AppColors.inkSoft, fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 14),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.baseline,
+                        textBaseline: TextBaseline.alphabetic,
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: Text(widget.merchant.currency,
+                                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: AppColors.inkFaint)),
+                          ),
+                          Text(_amount,
+                              style: const TextStyle(fontSize: 56, fontWeight: FontWeight.w800, color: AppColors.ink, letterSpacing: -1.5)),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      if (_error != null)
+                        Text(_error!, style: const TextStyle(color: AppColors.danger, fontSize: 13))
+                      else
+                        SizedBox(
+                          width: 240,
+                          child: TextField(
+                            controller: _note,
+                            textAlign: TextAlign.center,
+                            decoration: const InputDecoration(
+                              hintText: 'Add a note (optional)',
+                              filled: false,
+                              border: InputBorder.none,
+                              enabledBorder: InputBorder.none,
+                              focusedBorder: InputBorder.none,
+                              isDense: true,
+                            ),
+                          ),
+                        ),
+                      const SizedBox(height: 24),
+                    ],
                   ),
                 ),
-            ],
+                _Keypad(onKey: _tap),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+                  child: GradientButton(
+                    label: 'Request payment',
+                    gradient: AppGradients.mint,
+                    icon: Icons.contactless_rounded,
+                    loading: _busy,
+                    onPressed: _start,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
-        _Keypad(onKey: _tap),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
-          child: GradientButton(
-            label: 'Request payment',
-            gradient: AppGradients.mint,
-            icon: Icons.contactless_rounded,
-            loading: _busy,
-            onPressed: _start,
-          ),
-        ),
-      ],
+      ),
     );
   }
 }
