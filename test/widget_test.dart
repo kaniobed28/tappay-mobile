@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:tappay/screens/pay/scan_screen.dart';
+import 'package:tappay/features/sessions/presentation/scan_screen.dart';
 
 void main() {
   test('parseSessionId extracts id from tappay uri', () {

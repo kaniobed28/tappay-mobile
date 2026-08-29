@@ -1,7 +1,8 @@
 # TapPay Mobile
 
-Flutter app for TapPay — tap (NFC) or scan (QR) to pay, with Firebase Auth and a
-provider-hosted checkout (Paystack by default).
+Flutter app for TapPay — tap (NFC) or scan (QR) to pay, with Firebase Auth. Payment is
+completed whichever way the backend's provider works: an approval prompt on the payer's
+phone (MTN MoMo, the default) or a provider-hosted checkout page (Paystack).
 
 ## Prerequisites
 
@@ -35,33 +36,46 @@ use your machine's LAN IP (e.g. `http://192.168.1.20:8090/api`).
   This lets you exercise the full pay/receive flow immediately.
 - **Firebase:** run `flutterfire configure` (or add `google-services.json` /
   `GoogleService-Info.plist`) to enable real Firebase Auth. No code change needed —
-  [`AuthService`](lib/services/auth_service.dart) auto-detects Firebase and switches over.
+  [`AuthService`](lib/features/auth/data/auth_service.dart) auto-detects Firebase and switches over.
 
 ## Flows
 
 - **Receive (merchant):** set business name → enter amount → a signed session renders as a
   QR code and can be sent over NFC. The screen polls until the payment confirms.
-- **Pay (customer):** scan the QR (or tap NFC) → review merchant/amount → confirm → the
-  provider checkout opens in a webview → the result screen reflects the server-verified status.
+- **Pay (customer):** scan the QR (or tap NFC) → review merchant/amount → confirm → finish
+  the payment the way the provider works — a checkout page in a webview (card/bank), or by
+  approving the prompt on your own phone (mobile money) while the app waits → the result
+  screen reflects the server-verified status.
 
 ## Structure
 
+Feature-first: everything one feature needs lives in its folder, and features are named
+after the same slices as the backend's modules.
+
 ```
 lib/
-  config.dart            API base URL, callback scheme
-  theme.dart             brand theme + amount formatting
-  models/models.dart     API DTOs
-  services/
-    auth_service.dart    Firebase Auth (+ dev fallback)
-    api_client.dart      typed Dio client w/ bearer interceptor
-    nfc_service.dart     NFC read/write of the session id
-  screens/
-    auth/                login / register
-    home_screen.dart     dashboard + bottom nav
-    receive/             merchant: amount -> QR/NFC collect
-    pay/                 customer: scan -> review -> checkout -> result
-    history/             transaction activity
+  main.dart              entrypoint
+  app/
+    app.dart             root widget + signed-in/out gate
+    dependencies.dart    all DI wiring, in one place
+  core/                  shared by every feature, owned by none
+    config/              API base URL, callback scheme
+    network/             Dio transport (auth header, retry) + error helpers
+    realtime/            socket.io client
+    theme/  widgets/     brand theme, shared UI
+  features/
+    <feature>/
+      data/              its API client, models, device services
+      presentation/      its screens
 ```
+
+The features are `auth`, `home`, `users`, `merchants`, `sessions` (tap/QR hand-off),
+`payments`, `requests`, `notifications`, `receipts`.
+
+Each feature exposes exactly one API object (`PaymentsApi`, `SessionsApi`, …) over the
+shared transport, so a screen depends on its own feature's API rather than on one client
+that knows every endpoint. Imports are package-absolute (`package:tappay/…`), so moving a
+file doesn't ripple.
 
 ## Notes on NFC
 
