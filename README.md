@@ -1,7 +1,8 @@
 # TapPay Mobile
 
-Flutter app for TapPay — tap (NFC) or scan (QR) to pay, with Firebase Auth and a
-provider-hosted checkout (Paystack by default).
+Flutter app for TapPay — tap (NFC) or scan (QR) to pay, with Firebase Auth. Payment is
+completed whichever way the backend's provider works: an approval prompt on the payer's
+phone (MTN MoMo, the default) or a provider-hosted checkout page (Paystack).
 
 ## Prerequisites
 
