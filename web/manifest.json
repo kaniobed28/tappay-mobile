@@ -1,11 +1,11 @@
 {
-    "name": "tappay",
-    "short_name": "tappay",
+    "name": "TapPay",
+    "short_name": "TapPay",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#5B4BFF",
+    "theme_color": "#5B4BFF",
+    "description": "TapPay — contactless peer-to-peer payments over NFC and QR.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
