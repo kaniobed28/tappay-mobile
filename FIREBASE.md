@@ -1,7 +1,7 @@
 # Enabling real Firebase Auth
 
 The app auto-detects Firebase: it runs in **demo auth** until `google-services.json` is
-present, then switches to real Firebase automatically ([`AuthService`](lib/services/auth_service.dart)
+present, then switches to real Firebase automatically ([`AuthService`](lib/features/auth/data/auth_service.dart)
 and the conditional Gradle plugin in [`android/app/build.gradle.kts`](android/app/build.gradle.kts)).
 No Dart changes needed.
 
